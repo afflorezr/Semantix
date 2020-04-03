@@ -150,7 +150,7 @@ rbind(Campaign=Quantil_campaign,Previous=Quantil_previous) %>%
 ```
 
 <p style="text-align:justify; font-size:18px;">
-No gráfico abaixo mostramos simultaneamente o numero de contatos em campanhas anteriores e atual. Observa-se que a maior proporção de contatos ocorre quando contatos prévios não tem sido feitos, maior mente só se faz contato na campanha atual.
+No gráfico abaixo mostramos simultaneamente o numero de contatos em campanhas anteriores e atual. Observa-se que a maior proporção de contatos ocorre quando contatos prévios não têm sido feitos, frequentemente só se faz contato na campanha atual.
 </p>
 ```{r,echo=FALSE, warning=FALSE, message=FALSE,fig.align='center'} 
 ## Table de contingencia ##
@@ -287,7 +287,7 @@ Novamente, como nosso interesse é especialmente interpretar as variáveis, util
 ```
 <br>
 <p style="text-align:justify; font-size:18px;">
-Baseados nesse modelo apresentamos abaixo algumas gráficas descritivas dos clientes possuem empréstimo imobiliário.
+Baseados nesse modelo, apresentamos abaixo alguns gráficos descritivos dos clientes que possuem empréstimo imobiliário.
 </p>
 <br>
 
@@ -339,6 +339,6 @@ gridExtra::grid.arrange(g3, g4,g5,g6, ncol=2)
 
 <br>
 <p style="text-align:justify; font-size:18px;">
-Dos clientes que possuem um empréstimo imobiliário podemos dizer que tem uma idade media de 39 anos, a maior proporção trabalham com blue-collar or management, o nível educativo mais frequente é secondary e o balance promedio é de 1175.
+Dos clientes que possuem um empréstimo imobiliário podemos dizer que têm uma idade média de 39 anos, a maior proporção trabalha com blue-collar ou management, o nível educativo mais frequente é secondary e o balance médio é de 1175.
 </p>
 <br>
