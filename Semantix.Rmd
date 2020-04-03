@@ -1,0 +1,344 @@
+---
+title: "Desafio Data Science-Semantix "
+author: "Andrés Felipe Flórez Rivera"
+date: "4/3/2020"
+output: 
+  html_document:
+    keep_md: true
+    toc: true
+    #toc_depth: 2
+    toc_float: true
+    #number_sections: true
+    theme: united
+    highlight: tango
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, fig.align = "center")
+```
+
+```{r,echo=FALSE,warning=FALSE,message=FALSE}
+##########################################################################################
+##                                      Pacotes                                         ##
+##########################################################################################
+library(tidyverse)
+library(caret)
+library(e1071)
+library(rpart)
+library(rpart.plot)
+library(randomForest)
+library(caTools)
+library(descr)
+library(data.table)
+library(readr)
+library(kableExtra)
+library(precrec)
+library(ROCR)
+theme_set(theme_bw())
+##########################################################################################
+##                              Leitura de dados                                        ##
+##########################################################################################
+
+
+dados <- read_delim("bank-full.csv",";", escape_double = FALSE, trim_ws = TRUE)
+
+
+
+##########################################################################################
+##                              Analise Descritiva                                      ##
+##########################################################################################
+#summary(dados)
+```
+
+# Questões
+
+### 1. Qual profissão tem mais tendência a fazer um empréstimo? De qual tipo? 
+
+<p style="text-align:justify; font-size:18px;">
+Podemos analisar descritivamente  o número de empréstimos feitos em cada profissão. Para isso, olhemos a tabela de frequência absoluta relacionada a essa variável.</p>
+
+
+```{r,echo=FALSE, warning=FALSE, message=FALSE,fig.align='center'}
+  table(dados$job) %>% 
+  kable(col.names = c("Variável","Frequência")) %>%
+  kable_styling("striped", full_width = F) %>% 
+  scroll_box(height = "250px",box_css = "border: 0px solid #FFFFFF; padding: 0px; ")
+```
+<br>
+<p style="text-align:justify; font-size:18px;">
+Uma maneira mais clara de observar as frequências é por meio de um gráfico de barras.
+</p>
+<br>
+```{r,echo=FALSE,warning=FALSE,message=FALSE,fig.align='center'}
+## Dados total Empréstimo
+q1<-dados %>%
+  filter(housing=="yes" | loan =="yes") %>%
+  group_by(job) %>% 
+  summarise(n=n())
+
+## Dados tipo de Empréstimo
+q1_1<-dados %>%
+  filter(housing=="yes") %>%
+  group_by(job) %>% 
+  summarise(n=n()) %>% 
+  cbind(tipo="Housing")
+
+q1_2<-dados %>%
+  filter(loan=="yes") %>%
+  group_by(job) %>% 
+  summarise(n=n()) %>% 
+  cbind(tipo="Loan")
+
+## Grafico total Empréstimo
+g1<-ggplot(q1,aes(x=reorder(job, n),y=n))+
+  geom_bar(stat = "identity",fill="#FC9272")+
+  ylab("Frequência")+
+  xlab("Profissão")+
+  coord_flip()+
+  scale_fill_brewer(palette="Reds")+
+  theme_bw()
+
+## Grafico tipo de Empréstimo
+df1<-rbind(q1_1, q1_2)
+g2<-ggplot(arrange(df1, tipo),aes(x=reorder(job, n),y=n, fill=tipo))+
+  geom_bar(stat = "identity", position=position_dodge())+
+  ylab("Frequência")+
+  xlab("Profissão")+
+  coord_flip()+
+  scale_fill_brewer(palette="Reds")+
+  theme(legend.position = c(0.8, 0.2))
+gridExtra::grid.arrange(g1, g2, ncol=2)
+```
+
+<p style="text-align:justify; font-size:18px;">
+Pelos gráficos, notamos que blue-collar é a profissão que mais realiza empréstimos e o tipo de empréstimo predominante é Housing. 
+</p>
+
+### 2. Fazendo uma relação entre número de contatos e sucesso da campanha quais são os pontos relevantes a serem observados?
+<p style="text-align:justify; font-size:18px;">
+Considerando apenas o número de contatos durante a campanha atual, observemos no gráfico abaixo que o maior número de adesão ocorre quando o cliente é contatado poucas vezes, menos que 5 vezes. O eixo horizontal do gráfico foi reduzido ao intervalo (0,30] pois a frequência para valores acima de 30 contatos não se mostrou relevante.
+</p>
+
+
+```{r,echo=FALSE, warning=FALSE, message=FALSE,fig.align='center'}
+ggplot(data=dados, aes(x=campaign, fill=y))+
+  geom_histogram()+
+  ggtitle("Adesão baseada no número de contatos durante a campanha")+
+  xlab("Número de contatos")+
+  ylab("Frequência")+
+  xlim(c(min=1,max=30)) +
+  guides(fill=guide_legend(title="Adesão"))+
+  scale_fill_brewer(palette="Reds")
+```
+
+<p style="text-align:justify; font-size:18px;">
+Adicionalmente, podemos  avaliar se contatos realizados previamente influenciam na adesão do cliente. Inicialmente, comparemos os decis da distribuição das variáveis "Campain" e "Previous", considerando apenas os clientes que responderam "sim" à adesão. Notemos que 90% dos contatos foram menores que 4 tanto na campanha atual quanto previamente. 
+</p>
+```{r,echo=FALSE, warning=FALSE, message=FALSE,fig.align='center'}
+## Quantis
+Quantil_previous<-(dados %>% 
+  filter(y=="yes"))$previous %>% 
+  quantile(seq(0.1,1,0.1))
+Quantil_campaign<-(dados %>% 
+                     filter(y=="yes"))$campaign %>% 
+  quantile(seq(0.1,1,0.1))
+
+rbind(Campaign=Quantil_campaign,Previous=Quantil_previous) %>% 
+  kable() %>%
+  kable_styling("striped") %>%
+  add_header_above(c(" " = 1, "Percentiles" = 10))
+```
+
+<p style="text-align:justify; font-size:18px;">
+No gráfico abaixo mostramos simultaneamente o numero de contatos em campanhas anteriores e atual. Observa-se que a maior proporção de contatos ocorre quando contatos prévios não tem sido feitos, maior mente só se faz contato na campanha atual.
+</p>
+```{r,echo=FALSE, warning=FALSE, message=FALSE,fig.align='center'} 
+## Table de contingencia ##
+  df2<-dados %>% filter(y=="yes" & previous<8 & campaign<8) %>% select(campaign,previous)
+  ftable(df2[c("previous", "campaign")]) %>%
+  prop.table() %>%
+  as.data.frame() %>% 
+  magrittr::set_colnames(c("Previous","Campaign","Proportion")) %>% 
+  ggplot( aes(y = Previous, x = Campaign , fill= Proportion)) + 
+  geom_tile()+
+  scale_fill_gradient(low = "#FEE0D2", high = "#EF3B2C")
+```
+
+<p style="text-align:justify; font-size:18px;">
+Até este momento, a análise dos dados foi apenas exploratória. Com o objetivo de realizar uma análise inferencial e dado que a natureza da variável de interesse (adesão) é binária, utilizaremos um modelo de regressão logístico para ajustar os dados e avaliar a relação entre as variáveis. Consideramos o modelo logístico porque, neste momento, estamos interessados principalmente na interpretabilidade dos parâmetros. Primeiramente foi ajustado um modelo sem considerar as variáveis socio-econômicas. Utilizamos o critério AIC (*Akaike information criterion*) e temos as estimativas, os respectivos erros-padrão e os valores descritivos do teste apresentados na tabela abaixo.
+</p>
+```{r,echo=FALSE, warning=FALSE, message=FALSE,fig.align='center'}
+
+## Modelo de regressão
+fit<- glm(ifelse(y=="yes",1,0) ~ campaign + previous + contact + pdays + duration, data=dados, family=binomial(link="logit"))
+m1<-step(fit,trace=FALSE)
+m1_result<-summary(m1)
+
+m1_result$coefficients %>% 
+  kable() %>%
+  kable_styling("striped") %>%
+  add_header_above(c(" " = 1, "Logistic model output" = 4))
+```
+
+<p style="text-align:justify; font-size:18px;">
+O modelo corrobora com o observado na análise descritiva, isto é, quando o número de ligações aumenta, a probabilidade de um cliente responder "sim" à adesão, diminui. Abaixo, apresentamos a curva ROC do modelo ajustado. A acurácia do modelo é de 0.8509095.
+</p>
+```{r,echo=FALSE, warning=FALSE, message=FALSE,fig.align='center'}
+fit<- glm(ifelse(y=="yes",1,0) ~ campaign + previous + contact + pdays + duration, data=dados, family=binomial(link="logit"))
+m1<-step(fit,trace=FALSE)
+pred_lm = predict(m1, type='response')
+## Fazer a curva ROC
+rocr.pred = prediction(predictions = pred_lm, labels = dados$y)
+precrec_obj <- evalmod(scores = rocr.pred@predictions, labels = rocr.pred@labels)
+autoplot(precrec_obj)
+```
+
+
+### 3. Baseando-se nos resultados de adesão desta campanha qual o número médio e o máximo de ligações que você indica para otimizar a adesão?
+
+<p style="text-align:justify; font-size:18px;">
+Como argumentado na questão anterior, considerando a distribuição do número de ligações para os clientes que aderiram, devem ser feitas, em média, 2 ligações. Apesar do número máximo de ligações no grupo de clientes que a adesão foi positiva ter sido maior que 4, podemos observar pelo boxplot que esses valores são *outliers* (dados com comportamento diferente dos demais). Portanto, pela distribuição quantílica mostrada anteriormente e pelo boxplot apresentado, sugerimos que sejam realizadas no máximo 4 ligações. 
+</p>
+```{r,echo=FALSE, warning=FALSE, message=FALSE,fig.align='center'}
+  #Tabla Resumo
+  (dados %>% filter(y=="yes"))$campaign %>% 
+  summary() %>%
+  as.matrix() %>% t() %>% 
+  kable() %>% 
+  kable_styling("striped", full_width = F)
+
+# Boxplot
+dados %>% 
+filter(y=="yes") %>% 
+select(campaign) %>%
+ggplot(aes(x="Campaign",y=campaign,fill="#FEE0D2")) +
+ylab("Número de Contatos")+
+geom_boxplot()+
+stat_summary(fun.y=mean, geom="point", shape=20, size=5, color="red", fill="red")+
+theme(legend.position="none") +
+coord_flip()
+
+```
+
+
+### 4. O resultado da campanha anterior tem relevância na campanha atual?
+<p style="text-align:justify; font-size:18px;">
+Para entender se a campanha anterior tem relevância na campanha atual vamos organizar os dados em uma tabela de contingência e utilizaremos o teste de Qui-quadrado para verificar se existe alguma relação entre as campanhas.
+</p>
+
+```{r,echo=FALSE, warning=FALSE, message=FALSE,fig.align='center'}
+t1<-table(dados[c("poutcome","y")]) 
+  t1%>%
+  kable() %>%
+  kable_styling("striped",full_width = F) %>% 
+  add_header_above(c("poutcome" = 1, "y" = 2))
+
+  t1 %>% chisq.test()
+
+```
+
+<p style="text-align:justify; font-size:18px;">
+Observe que o valor-p da estatística Qui-quadrado foi significativo, considerando um nível de significância de 0.05. Consequentemente, podemos rejeitar a hipótese de independência entre as campanhas, isto é, existe associação entre o resultado da campanha atual e a campanha anterior.
+</p>
+
+## 5. Qual o fator determinante para que o banco exija um seguro de crédito?
+<p style="text-align:justify; font-size:18px;">
+Como informação *a priori*, sabemos que oferecer crédito a um inadimplente pode representar um risco maior para a instituição que oferece. Na situação em estudo, uma das variáveis, denominada "default", classifica os clientes em adimplente ("no") e inadimplente ("yes"). Para verificar se essa variável deve ser considerada importante, podemos, inicialmente, analisar a proporção de pessoas que estão em *default* e que aderiram à campanha. 
+</p>
+<br>
+```{r,echo=FALSE, warning=FALSE, message=FALSE,fig.align='center'}
+CrossTable(dados$default,dados$y, prop.r = T,
+           prop.c = F,
+           prop.t = F,
+           prop.chisq = F)
+```
+<br>
+<p style="text-align:justify; font-size:18px;">
+Como observado na tabela anterior, quase 2% das pessoas que estão devendo, aderiram à campanha. Esta pode ser uma variável determinante para que o banco exija um seguro de crédito. Podemos ainda analisar as características dos clientes que estão em *default* por meio de um modelo de regressão. </p>
+<br>
+```{r,echo=FALSE, warning=FALSE, message=FALSE,fig.align='center'}
+
+fit2<- glm(ifelse(default=="yes",1,0) ~ age+job+marital+education+balance+housing+loan+
+                                        campaign + previous + contact + pdays + duration+
+                                        poutcome + y, data=dados, family=binomial(link="logit"))
+  m2<-step(fit2,trace=FALSE)
+  m2_result<-summary(m2)
+  m2_result$coefficients %>% 
+  kable() %>%
+  kable_styling("striped") %>%
+  add_header_above(c(" " = 1, "Logistic model output" = 4)) %>% 
+  scroll_box(height = "250px")
+```
+
+## 6. Quais são as características mais proeminentes de um cliente que possua empréstimo imobiliário?
+<p style="text-align:justify; font-size:18px;">
+Novamente, como nosso interesse é especialmente interpretar as variáveis, utilizaremos um modelo logístico. A variável resposta que desejamos entender é "housing", de natureza binária, e assume "yes" se o cliente fez empréstimo imobiliário e "no" caso contrário.
+</p><br>
+```{r,echo=FALSE, warning=FALSE, message=FALSE,fig.align='center'}
+  fit3<- glm(ifelse(housing=="yes",1,0) ~ age+job+marital+education+balance+default+loan,
+              data=dados, family=binomial(link="logit"))
+  m3<-step(fit3,trace=FALSE)
+  m3_result<-summary(m3)
+  m3_result$coefficients %>% 
+  kable() %>%
+  kable_styling("striped") %>%
+  add_header_above(c(" " = 1, "Logistic model output" = 4)) %>% 
+  scroll_box(height = "200px")
+```
+<br>
+<p style="text-align:justify; font-size:18px;">
+Baseados nesse modelo apresentamos abaixo algumas gráficas descritivas dos clientes possuem empréstimo imobiliário.
+</p>
+<br>
+
+```{r,echo=FALSE, warning=FALSE, message=FALSE,fig.align='center'}
+df4<-dados %>%
+filter(housing=="yes")
+
+#Grafico 3
+g3<-df4%>%
+select(age) %>%
+ggplot(aes(x="Idade",y=age,fill="#FEE0D2")) +
+geom_boxplot()+
+stat_summary(fun.y=mean, geom="point", shape=20, size=5, color="red", fill="red")+
+theme(legend.position="none") +
+coord_flip()
+
+#Grafico 4
+g4<-df4 %>%
+group_by(job) %>%
+summarise(n=n()) %>%
+ggplot(aes(x=reorder(job, n),y=n))+
+geom_bar(stat = "identity",fill="#FC9272")+
+ylab("Frequência")+
+xlab("Profissão")+
+coord_flip()+
+scale_fill_brewer(palette="Reds")
+
+#Grafico 5
+g5<-df4 %>%
+group_by(education) %>%
+summarise(n=n()) %>%
+ggplot(aes(x=reorder(education, n),y=n))+
+geom_bar(stat = "identity",fill="#FC9272")+
+ylab("Frequência")+
+xlab("Education")+
+coord_flip()+
+scale_fill_brewer(palette="Reds")
+
+#Grafico 6
+g6<-df4%>%
+select(balance) %>%
+ggplot(aes(x = balance)) +
+geom_histogram(fill="#FC9272")+
+ylab("Frequência")+
+xlab("Balance")
+gridExtra::grid.arrange(g3, g4,g5,g6, ncol=2)
+
+```
+
+<br>
+<p style="text-align:justify; font-size:18px;">
+Dos clientes que possuem um empréstimo imobiliário podemos dizer que tem uma idade media de 39 anos, a maior proporção trabalham com blue-collar or management, o nível educativo mais frequente é secondary e o balance promedio é de 1175.
+</p>
+<br>

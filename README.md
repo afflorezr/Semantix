@@ -1,0 +1,2 @@
+# Desafio Data Science
+A analise foi feita no [R](https://www.r-project.org/) e a apresentação dos resultados no [rmarkdown](https://rmarkdown.rstudio.com/). O arquivo **code.R** e **Semantix.Rmd** contem o código da analise e o código da apresentação respectivamente. Os resultados e a analise pode-se visualizar [aqui](https://htmlpreview.github.io/?https://github.com/afflorezr/test/blob/master/Semantix.html).
